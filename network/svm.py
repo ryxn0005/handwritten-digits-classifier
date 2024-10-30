@@ -3,6 +3,9 @@ import numpy as np
 import os
 import pickle
 from tqdm import tqdm
+from datetime import datetime
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import log_loss
 
 
 class SVMImageClassifier(svm.SVC):
@@ -56,49 +59,85 @@ class SVMImageClassifier(svm.SVC):
         else:
             raise ValueError(f"Unexpected input shape: {X.shape}")
 
-    def train(self, X, y, batch_size=100):
+    def train(self, X, y, batch_size=100, epochs=10, validation_split=0.2):
         """
-        Train the SVM model on flattened images with approximate batching.
+        Train the SVM model on flattened images with approximate batching and epochs.
+        Logs history to a .pkl file with train/validation accuracy and loss per epoch.
         """
         X_flat = self._flatten_images(X)
-        n_samples = X_flat.shape[0]
+
+        # Split the data into training and validation sets
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_flat, y, test_size=validation_split, random_state=42
+        )
+        n_samples = X_train.shape[0]
 
         # Initialize history dictionary to record metrics
-        history = {"batch": [], "samples_seen": [], "accuracy": []}
+        history = {
+            "epoch": [],
+            "train_accuracy": [],
+            "train_loss": [],
+            "val_accuracy": [],
+            "val_loss": [],
+        }
 
-        support_vectors = None
-        support_labels = None
+        for epoch in range(epochs):
+            # Shuffle the training data at the beginning of each epoch
+            indices = np.arange(n_samples)
+            np.random.shuffle(indices)
+            X_train = X_train[indices]
+            y_train = y_train[indices]
 
-        # Process each batch
-        for batch_idx, start in enumerate(
-            tqdm(range(0, n_samples, batch_size), desc="Training SVM", unit="batch")
-        ):
-            end = min(start + batch_size, n_samples)
-            X_batch, y_batch = X_flat[start:end], y[start:end]
+            # Track support vectors and labels
+            support_vectors = None
+            support_labels = None
 
-            if start == 0:
-                # Initial fit on the first batch
-                super().fit(X_batch, y_batch)
-                support_vectors = self.support_
-                support_labels = y[self.support_]
-            else:
-                # Combine support vectors and fit with the new batch
-                X_combined = np.vstack([X_flat[support_vectors], X_batch])
-                y_combined = np.hstack([support_labels, y_batch])
+            for start in tqdm(
+                range(0, n_samples, batch_size),
+                desc=f"SVM | Epoch {epoch + 1}/{epochs}",
+                unit="batch",
+            ):
+                end = min(start + batch_size, n_samples)
+                X_batch, y_batch = X_train[start:end], y_train[start:end]
 
-                # Fit again with combined support vectors and new batch
-                super().fit(X_combined, y_combined)
-                # Update support vectors with the latest ones
-                support_vectors = self.support_
-                support_labels = y_combined[self.support_]
+                if start == 0:
+                    # Initial fit on the first batch of the epoch
+                    super().fit(X_batch, y_batch)
+                    support_vectors = self.support_
+                    support_labels = y_train[self.support_]
+                else:
+                    # Combine support vectors and fit with the new batch
+                    X_combined = np.vstack([X_train[support_vectors], X_batch])
+                    y_combined = np.hstack([support_labels, y_batch])
 
-            # Calculate accuracy for the current batch
-            batch_acc = super().score(X_batch, y_batch)
-            history["batch"].append(batch_idx + 1)
-            history["samples_seen"].append(len(y_batch))
-            history["accuracy"].append(batch_acc)
+                    # Fit again with combined support vectors and new batch
+                    super().fit(X_combined, y_combined)
+                    # Update support vectors with the latest ones
+                    support_vectors = self.support_
+                    support_labels = y_combined[self.support_]
 
-            print(f"Batch {batch_idx + 1} - Accuracy: {batch_acc:.4f}")
+            # Calculate training accuracy and loss for the current epoch
+            train_accuracy = super().score(X_train, y_train)
+            train_probabilities = super().predict_proba(X_train)
+            train_loss = log_loss(y_train, train_probabilities)
+            # Calculate validation accuracy and loss for the current epoch
+            val_accuracy = super().score(X_val, y_val)
+            val_probabilities = super().predict_proba(X_val)
+            val_loss = log_loss(y_val, val_probabilities)
+
+            # Record history
+            history["epoch"].append(epoch + 1)
+            history["train_accuracy"].append(train_accuracy)
+            history["train_loss"].append(train_loss)
+            history["val_accuracy"].append(val_accuracy)
+            history["val_loss"].append(val_loss)
+
+            print(
+                f"Epoch {epoch + 1} - Train Accuracy: {train_accuracy:.4f} - Train Loss: {train_loss:.4f} - Validation Accuracy: {val_accuracy:.4f} - Validation Loss: {val_loss:.4f}"
+            )
+
+        # Save history log
+        self._save_history(history)
 
         return history
 
@@ -121,3 +160,18 @@ class SVMImageClassifier(svm.SVC):
         with open(processed_data_path, "wb") as pickle_out:
             pickle.dump(self, pickle_out)
         print(f"Model saved to '{processed_data_path}'")
+
+    def _save_history(self, history):
+        """
+        Save the training history to a log file.
+        """
+        log_dir = f"./logs/{self.abbreviation}/"
+        os.makedirs(log_dir, exist_ok=True)  # Ensure directory exists
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        history_path = os.path.join(log_dir, f"history-{timestamp}.pkl")
+
+        # Save the history
+        with open(history_path, "wb") as history_file:
+            pickle.dump(history, history_file)
+        print(f"Training history saved to '{history_path}'")

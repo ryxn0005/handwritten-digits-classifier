@@ -102,6 +102,11 @@ class Trainer:
             for callback in self.callbacks:
                 callback.on_epoch_begin(epoch)
 
+            # Shuffle the training data at the beginning of each epoch
+            indices = np.arange(len(self.train_X))
+            np.random.shuffle(indices)
+            self.train_X, self.train_y = self.train_X[indices], self.train_y[indices]
+
             # Training loop
             for i in tqdm(
                 range(0, len(self.train_X), self.batch_size),

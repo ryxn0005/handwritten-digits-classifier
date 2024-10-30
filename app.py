@@ -275,18 +275,3 @@ if __name__ == "__main__":
 #     for metric_name, metric_value in class_metrics.items():
 #         print(f"  {metric_name}: {metric_value:.4f}")
 #
-
-# X_train = X_train[:1250]
-# X_test = X_test[:1250]
-# y_train = y_train[:1250]
-# y_test = y_test[:1250]
-#
-#
-# rf = SVMImageClassifier()
-#
-# rf.train(X_train, y_train, 64)
-#
-# y_pred = rf.predict(X_test)
-#
-# print(y_pred)
-# print(y_test)
