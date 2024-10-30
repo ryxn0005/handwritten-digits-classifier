@@ -227,25 +227,6 @@ if __name__ == "__main__":
     main()
 
 
-# trainer = Trainer(
-#     model=model,
-#     train_X=X_train,
-#     train_y=y_train,
-#     optimizer=optimizer,
-#     loss_fn=loss_fn,
-#     metrics=[
-#         SparseCategoricalAccuracy(name="acc"),
-#         SparseTopKCategoricalAccuracy(5, name="top_5_acc"),
-#     ],
-#     validation_split=0.2,
-#     epochs=10,
-#     batch_size=256,
-#     num_augs=3,
-#     callbacks=callbacks,
-# )
-# trainer.train()
-#
-
 # cross_validation_score = k_fold_cross_validation(
 #     VisionTransformer,
 #     X=X_train,
