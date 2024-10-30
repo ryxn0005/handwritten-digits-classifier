@@ -15,7 +15,7 @@ import os
 import keras
 from evaluation.confusion_matrix import plot_confusion_matrix
 from evaluation.math_metrics import calculate_multiclass_metrics
-from training.cross_validation import k_fold_cross_validation
+from evaluation.cross_validation import k_fold_cross_validation
 import pickle
 
 
