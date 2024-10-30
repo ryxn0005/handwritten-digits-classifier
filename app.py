@@ -222,11 +222,16 @@ def main():
             if X_train is None or X_test is None or y_train is None or y_test is None:
                 print("Please load the training data first.")
                 continue
+
+            print("Specify hyperparameters for K-Fold Cross Validation:")
+            n_folds = int(input("Enter number of folds (default 10): ") or 10)
+            hyperparameters = specify_hyperparameters("general")
+
             models = {
-                "Vision Transformer": VisionTransformer,
-                "ConvNet": ConvNet,
-                "Random Forest": RandomForestImageClassifier,
-                "SVM": SVMImageClassifier,
+                "Vision Transformer": lambda: VisionTransformer(),
+                "ConvNet": lambda: ConvNet(),
+                "Random Forest": lambda: RandomForestImageClassifier(),
+                "SVM": lambda: SVMImageClassifier(),
             }
             model_scores = k_fold_cross_validation(
                 models=models,
@@ -237,11 +242,11 @@ def main():
                     SparseCategoricalAccuracy(name="acc"),
                     SparseTopKCategoricalAccuracy(5, name="top_5_acc"),
                 ],
-                epochs=10,
-                batch_size=32,
-                num_augs=2,
+                epochs=hyperparameters.get("num_epochs"),
+                batch_size=hyperparameters.get("batch_size"),
+                num_augs=hyperparameters.get("num_augs", 2),
                 callbacks=None,
-                k=5,
+                k=n_folds,
                 save_dir="./model",
             )
         elif choice == 0:
@@ -254,21 +259,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-# cross_validation_score = k_fold_cross_validation(
-#     VisionTransformer,
-#     X=X_train,
-#     y=y_train,
-#     loss_fn=loss_fn,
-#     metrics=[SparseCategoricalAccuracy(name="acc")],
-#     epochs=1,
-#     batch_size=256,
-#     num_augs=2,
-#     k=10,
-# )
-#
-
-# print(cross_validation_score)
 
 # y_pred = model.predict(X_custom)
 #
