@@ -13,6 +13,7 @@ from keras.src.optimizers import AdamW, Adam
 from training.train_custom import Trainer
 import os
 import keras
+import numpy as np
 from evaluation.confusion_matrix import plot_confusion_matrix
 from evaluation.math_metrics import calculate_multiclass_metrics
 from evaluation.cross_validation import k_fold_cross_validation
@@ -189,9 +190,10 @@ def main():
         print("\nMain Menu:")
         print("1. Load Training Data")
         print("2. Train Model")
+        print("3. Perform K-Fold Cross Validation")
         print("0. Exit")
 
-        choice = int(input("Select an option (0-2): "))
+        choice = int(input("Select an option (0-3): "))
 
         if choice == 1:
             X_train, X_test, y_train, y_test = load_data()
@@ -216,6 +218,32 @@ def main():
                 )
             else:
                 print("Invalid option selected.")
+        elif choice == 3:
+            if X_train is None or X_test is None or y_train is None or y_test is None:
+                print("Please load the training data first.")
+                continue
+            models = {
+                "Vision Transformer": VisionTransformer,
+                "ConvNet": ConvNet,
+                "Random Forest": RandomForestImageClassifier,
+                "SVM": SVMImageClassifier,
+            }
+            model_scores = k_fold_cross_validation(
+                models=models,
+                X=np.concatenate([X_train, X_test], axis=0),
+                y=np.concatenate([y_train, y_test], axis=0),
+                loss_fn=SparseCategoricalCrossentropy(),
+                metrics=[
+                    SparseCategoricalAccuracy(name="acc"),
+                    SparseTopKCategoricalAccuracy(5, name="top_5_acc"),
+                ],
+                epochs=10,
+                batch_size=32,
+                num_augs=2,
+                callbacks=None,
+                k=5,
+                save_dir="./model",
+            )
         elif choice == 0:
             print("Exiting the program.")
             break
