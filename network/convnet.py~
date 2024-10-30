@@ -1,0 +1,50 @@
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import (
+    Dense,
+    Dropout,
+    Activation,
+    Flatten,
+    BatchNormalization,
+    Conv2D,
+    MaxPooling2D,
+    ReLU,
+)
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping, Callback
+
+
+# Define a custom callback to ensure a minimum number of epochs
+class MinimumEpochs(Callback):
+    def __init__(self, min_epochs):
+        super(MinimumEpochs, self).__init__()
+        self.min_epochs = min_epochs
+
+    def on_epoch_end(self, epoch, logs=None):
+        if epoch + 1 < self.min_epochs:
+            # Override early stopping if epoch count is below minimum
+            self.model.stop_training = False
+
+
+# EarlyStopping callback to stop training if no improvement
+early_stopping = EarlyStopping(
+    monitor="val_loss",  # Monitoring Validation Set Losses
+    patience=2,  # Tolerating 2 epochs of no improvement
+    mode="min",  # The goal is to minimize validation losses
+    min_delta=0.001,  # Minimum margin of improvement
+    verbose=1,  # Output of early stop information
+)
+
+# Custom callback to enforce minimum of 5 epochs
+min_epochs_callback = MinimumEpochs(min_epochs=5)
+
+
+class ConvNet(Sequential):
+    def __init__(self, input_dims: [int] = [28, 28, 1]):
+        super(ConvNet, self).__init__()
+        self.input_dims = input_dims
+
+        # ConvNet block 1:
+        self.add(Conv2D(128, (3, 3), self.input_dims, padding="same"))
+        self.add(BatchNormalization())
+        self.add(ReLU())
+        self.add(MaxPooling2D(pool_size=(2, 2)))
