@@ -21,11 +21,9 @@ import pickle
 from sklearn.utils import resample
 
 
-def load_data():
+def load_data(test_size):
     c = CustomDataLoader("./data/raw/", 28)
     X, y = c.load_data()
-
-    test_size = 0.3
     split_index = int(X.shape[0] * (1 - test_size))
     X_train, X_test = X[:split_index], X[split_index:]
     y_train, y_test = y[:split_index], y[split_index:]
@@ -246,8 +244,13 @@ def main():
         choice = int(input("Select an option (0-3): "))
 
         if choice == 1:
-            X_train, X_test, y_train, y_test = load_data()
+            X_train, X_test, y_train, y_test = load_data(test_size=0.3)
             print("Data loaded successfully!")
+            print(f"X train: {X_train.shape}")
+            print(f"X test: {X_test.shape}")
+            print(f"y train: {y_train.shape}")
+            print(f"y test: {y_test.shape}")
+
         elif choice == 2:
             if X_train is None or X_test is None or y_train is None or y_test is None:
                 print("Please load the training data first.")
@@ -291,14 +294,6 @@ def main():
                     n_classes=10,
                 ),
                 "ConvNet": lambda: ConvNet(n_classes=10),
-                "Random Forest": lambda: RandomForestImageClassifier(
-                    n_estimators=50,
-                    max_depth=20,
-                    max_features="sqrt",
-                ),
-                "SVM": lambda: SVMImageClassifier(
-                    C=1.0, kernel="rbf", probability=True
-                ),
             }
             model_scores = k_fold_cross_validation(
                 models=models,
@@ -385,6 +380,7 @@ def main():
             # Plot confusion matrix and calculate metrics if the model is successfully loaded
             plot_confusion_matrix(y_test, y_pred_classes)
 
+            # Calculate accuracy, precision, recall and f1-score of each number for the model
             metrics = calculate_multiclass_metrics(y_test, y_pred_classes)
             for class_label, class_metrics in metrics.items():
                 print(f"Class {class_label} metrics:")

@@ -29,9 +29,13 @@ convnet
 138 epochs
 last epoch: train_loss: 0.2820 - train_accuracy: 0.9022 - val_loss: 0.1179 - val_accuracy: 0.9640
 
-random forest:
-
 svm:
+resampled data to 20000 images
+train_accuracy: 0.4572 - val_accuracy: 0.4530
+
+random forest:
+resampled data to 20000 images
+train_accuracy: 0.9512 - train_loss: 0.6175 - val_accuracy: 0.7578 - val_loss: 1.0856
 
 
 
