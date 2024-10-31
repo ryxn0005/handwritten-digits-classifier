@@ -4,10 +4,9 @@ __pycache__/
 *$py.class
 
 logs/*
-data/raw
-data/processed
-model/*/fold/
-*.pkl
+data/raw/*
+data/processed/*
+model/*
 
 # C extensions
 *.so
