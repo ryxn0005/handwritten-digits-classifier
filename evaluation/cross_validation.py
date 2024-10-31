@@ -81,13 +81,13 @@ def k_fold_cross_validation(
                 )
 
                 # Train Random Forest or SVM models
-                history = model.train(
+                log = model.train(
                     X_train_sampled,
                     y_train_sampled,
                     X_val=X_val_sampled,
                     y_val=y_val_sampled,
                 )
-                val_accuracy = np.mean(history["val_accuracy"])
+                val_accuracy = log["val_accuracy"]
 
             print(
                 f"Fold {fold + 1} - {model_name} - Validation Accuracy: {val_accuracy:.4f}"

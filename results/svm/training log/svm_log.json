@@ -1,0 +1,7 @@
+{
+    "epoch": 1.0,
+    "train_accuracy": 0.45725,
+    "train_loss": null,
+    "val_accuracy": 0.453,
+    "val_loss": null
+}

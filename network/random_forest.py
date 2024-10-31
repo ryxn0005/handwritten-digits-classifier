@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import log_loss
 import cupy as cp
 from sklearn.metrics import accuracy_score
+import json
 
 
 class RandomForestImageClassifier(RandomForestClassifier):
@@ -64,12 +65,12 @@ class RandomForestImageClassifier(RandomForestClassifier):
         val_probabilities = super().predict_proba(X_val)
         val_loss = log_loss(cp.asnumpy(y_val), cp.asnumpy(val_probabilities))
 
-        # Store training history
-        history = {
-            "train_accuracy": [train_accuracy],
-            "train_loss": [train_loss],
-            "val_accuracy": [val_accuracy],
-            "val_loss": [val_loss],
+        # Store training log
+        log = {
+            "train_accuracy": train_accuracy,
+            "train_loss": train_loss,
+            "val_accuracy": val_accuracy,
+            "val_loss": val_loss,
         }
 
         print(
@@ -78,9 +79,9 @@ class RandomForestImageClassifier(RandomForestClassifier):
         )
 
         # Save history log
-        self._save_history(history)
+        self._save_log(log)
 
-        return history
+        return log
 
     def predict(self, X):
         """
@@ -103,17 +104,21 @@ class RandomForestImageClassifier(RandomForestClassifier):
         pickle_out.close()
         print(f"Combined data saved to '{processed_data_path}'")
 
-    def _save_history(self, history):
+    def _save_log(self, log):
         """
-        Save the training history to a log file.
+        Save the training history to a log file in JSON format.
         """
         log_dir = f"./logs/{self.abbreviation}/"
         os.makedirs(log_dir, exist_ok=True)  # Ensure directory exists
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        history_path = os.path.join(log_dir, f"history-{timestamp}.pkl")
+        log_path = os.path.join(log_dir, f"log-{timestamp}.json")
 
-        # Save the history
-        with open(history_path, "wb") as history_file:
-            pickle.dump(history, history_file)
-        print(f"Training history saved to '{history_path}'")
+        log_serializable = {
+            k: float(v) if v is not None else None for k, v in log.items()
+        }
+
+        # Save the history as a JSON file
+        with open(log_path, "w") as log_file:
+            json.dump(log_serializable, log_file, indent=4)
+        print(f"Training history saved to '{log_path}'")
