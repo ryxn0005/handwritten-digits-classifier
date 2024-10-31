@@ -126,7 +126,10 @@ def setup_model(model_type, hyperparameters):
                 model = ConvNet(n_classes=10)
         else:
             model = ConvNet(n_classes=10)
-        optimizer = Adam(learning_rate=hyperparameters.get("learning_rate"))
+        optimizer = AdamW(
+            learning_rate=hyperparameters.get("learning_rate"),
+            weight_decay=hyperparameters.get("weight_decay"),
+        )
     elif model_type == "rfc":
         saved_model_path = "./model/rfc/rfc.pkl"
         if os.path.isfile(saved_model_path):
@@ -172,9 +175,9 @@ def setup_model(model_type, hyperparameters):
     if model_type in {"vit", "convnet"}:
         callbacks = [
             EarlyStopping(
-                monitor="val_accuracy",
+                monitor="val_loss",
                 patience=15,
-                mode="max",
+                mode="min",
                 min_delta=0.001,
                 verbose=1,
             ),
@@ -213,7 +216,7 @@ def train_model(model, optimizer, callbacks, hyperparameters, X_train, y_train):
         trainer.train()
     else:
         X_train_sampled, y_train_sampled = resample(
-            X_train, y_train, n_samples=40000, random_state=42
+            X_train, y_train, n_samples=20000, random_state=42
         )
 
         model.train(
@@ -314,19 +317,82 @@ def main():
                 save_dir="./model",
             )
         elif choice == 4:
-            model = keras.models.load_model("./model/convnet/convnet.keras")
+            print(
+                "1. Vision Transformer (ViT)\t2. ConvNet\t3. Random Forest (RFC)\t4. SVM"
+            )
 
-            y_pred = model.predict(X_test)
+            while True:
+                try:
+                    option = int(input("Choose a model to evaluate (1-4): "))
+                    if option in {1, 2, 3, 4}:
+                        break
+                    else:
+                        print("Invalid option. Please enter a number between 1 and 4.")
+                except ValueError:
+                    print("Invalid input. Please enter a number between 1 and 4.")
 
-            y_pred_classes = np.argmax(y_pred, axis=1)
+            # Define model paths for each option
+            model_paths = {
+                1: "./model/vit/vit.keras",
+                2: "./model/convnet/convnet.keras",
+                3: "./model/rfc/rfc.pkl",
+                4: "./model/svm/svm.pkl",
+            }
+
+            if option in {1, 2}:
+                # Load Keras model (ViT or ConvNet)
+                model_path = model_paths.get(option)
+                if model_path and os.path.isfile(model_path):
+                    model = keras.models.load_model(model_path)
+                    if X_test is not None:
+                        y_pred = model.predict(X_test)
+                        y_pred_classes = np.argmax(y_pred, axis=1)
+                    else:
+                        print("Test data not loaded. Returning to main menu.")
+                        return
+                else:
+                    print("Model file not found. Returning to main menu.")
+                    return
+
+            elif option in {3, 4}:
+                # Load non-deep learning models (RFC or SVM)
+                model_path = model_paths.get(option)
+                if model_path and os.path.isfile(model_path):
+                    with open(model_path, "rb") as f:
+                        model = pickle.load(f)
+                    if X_test is not None:
+                        # Flatten images if needed before making predictions
+                        if len(X_test.shape) == 4:
+                            n_samples, height, width, channels = X_test.shape
+                            X_test_flat = X_test.reshape(
+                                n_samples, height * width * channels
+                            )
+                        else:
+                            X_test_flat = X_test
+                        y_pred_classes = model.predict(X_test_flat)
+                        # Convert cuml array to numpy array if necessary
+                        if hasattr(y_pred_classes, "to_numpy"):
+                            y_pred_classes = y_pred_classes.to_numpy()
+                    else:
+                        print("Test data not loaded. Returning to main menu.")
+                        return
+                else:
+                    print("Model file not found. Returning to main menu.")
+                    return
+
+            else:
+                print("Invalid option selected. Returning to main menu.")
+                return
+
+            # Plot confusion matrix and calculate metrics if the model is successfully loaded
             plot_confusion_matrix(y_test, y_pred_classes)
 
             metrics = calculate_multiclass_metrics(y_test, y_pred_classes)
-
             for class_label, class_metrics in metrics.items():
                 print(f"Class {class_label} metrics:")
                 for metric_name, metric_value in class_metrics.items():
                     print(f"  {metric_name}: {metric_value:.4f}")
+
         elif choice == 0:
             print("Exiting the program.")
             break

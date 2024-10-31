@@ -23,11 +23,11 @@ num_augs = 2
 
 vit:
 161 epochs
-train_loss: 1.4348 - train_accuracy: 0.4508 - val_loss: 1.0499 - val_accuracy: 0.6343
+last epoch: train_loss: 1.4348 - train_accuracy: 0.4508 - val_loss: 1.0499 - val_accuracy: 0.6343
 
 convnet
-22 epochs
-train_loss: 2.3025 - train_accuracy: 0.1037 - val_loss: 2.3025 - val_accuracy: 0.1029 
+138 epochs
+last epoch: train_loss: 0.2820 - train_accuracy: 0.9022 - val_loss: 0.1179 - val_accuracy: 0.9640
 
 random forest:
 

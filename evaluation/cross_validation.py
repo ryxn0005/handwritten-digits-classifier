@@ -15,6 +15,8 @@ def k_fold_cross_validation(
     epochs=10,
     batch_size=32,
     num_augs=2,
+    learning_rate=0.001,
+    weight_decay=0.0001,
     callbacks=None,
     k=5,
     save_dir="./model",
@@ -46,11 +48,8 @@ def k_fold_cross_validation(
             model = model_fn()
 
             if model.abbreviation in {"vit", "convnet"}:
-                learning_rate = 0.001
-                optimizer = (
-                    AdamW(learning_rate=learning_rate, weight_decay=0.0001)
-                    if model.abbreviation == "vit"
-                    else Adam(learning_rate=learning_rate)
+                optimizer = AdamW(
+                    learning_rate=learning_rate, weight_decay=weight_decay
                 )
 
                 # Train the model on the current fold
@@ -72,12 +71,12 @@ def k_fold_cross_validation(
             else:
                 # Down-sample the dataset for classical ML models
                 X_train_sampled, y_train_sampled = resample(
-                    X_train, y_train, n_samples=40000, random_state=fold
+                    X_train, y_train, n_samples=20000, random_state=fold
                 )
                 X_val_sampled, y_val_sampled = resample(
                     X_val,
                     y_val,
-                    n_samples=min(40000, len(X_val)),
+                    n_samples=min(20000, len(X_val)),
                     random_state=fold,
                 )
 
