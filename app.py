@@ -313,6 +313,20 @@ def main():
                 k=n_folds,
                 save_dir="./model",
             )
+        elif choice == 4:
+            model = keras.models.load_model("./model/convnet/convnet.keras")
+
+            y_pred = model.predict(X_test)
+
+            y_pred_classes = np.argmax(y_pred, axis=1)
+            plot_confusion_matrix(y_test, y_pred_classes)
+
+            metrics = calculate_multiclass_metrics(y_test, y_pred_classes)
+
+            for class_label, class_metrics in metrics.items():
+                print(f"Class {class_label} metrics:")
+                for metric_name, metric_value in class_metrics.items():
+                    print(f"  {metric_name}: {metric_value:.4f}")
         elif choice == 0:
             print("Exiting the program.")
             break
@@ -322,20 +336,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# y_pred = model.predict(X_custom)
-#
-# y_pred_classes = np.argmax(y_pred, axis=1)
-#
-#
-# plot_confusion_matrix(y_custom, y_pred_classes)
-
-# metrics = calculate_multiclass_metrics(y_test, y_pred_classes)
-
-# Print metrics for each class
-# for class_label, class_metrics in metrics.items():
-#     print(f"Class {class_label} metrics:")
-#     for metric_name, metric_value in class_metrics.items():
-#         print(f"  {metric_name}: {metric_value:.4f}")
-#
