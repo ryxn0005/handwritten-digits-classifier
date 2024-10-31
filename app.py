@@ -370,9 +370,7 @@ def main():
                         else:
                             X_test_flat = X_test
                         y_pred_classes = model.predict(X_test_flat)
-                        # Convert cuml array to numpy array if necessary
-                        if hasattr(y_pred_classes, "to_numpy"):
-                            y_pred_classes = y_pred_classes.to_numpy()
+                        y_pred_classes = y_pred_classes.to_output("numpy")
                     else:
                         print("Test data not loaded. Returning to main menu.")
                         return
