@@ -1,49 +1,16 @@
-from sklearn import svm
-import numpy as np
+# from sklearn.svm import SVC
+from cuml.svm import SVC
 import os
 import pickle
-from tqdm import tqdm
 from datetime import datetime
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import log_loss
+import cupy as cp
+from sklearn.metrics import accuracy_score
 
 
-class SVMImageClassifier(svm.SVC):
-    def __init__(
-        self,
-        C=1.0,
-        kernel="rbf",
-        degree=3,
-        gamma="scale",
-        coef0=0.0,
-        shrinking=True,
-        probability=False,
-        tol=1e-3,
-        cache_size=200,
-        class_weight=None,
-        verbose=False,
-        max_iter=-1,
-        decision_function_shape="ovr",
-        break_ties=False,
-        random_state=None,
-    ):
-        super().__init__(
-            C=C,
-            kernel=kernel,
-            degree=degree,
-            gamma=gamma,
-            coef0=coef0,
-            shrinking=shrinking,
-            probability=probability,
-            tol=tol,
-            cache_size=cache_size,
-            class_weight=class_weight,
-            verbose=verbose,
-            max_iter=max_iter,
-            decision_function_shape=decision_function_shape,
-            break_ties=break_ties,
-            random_state=random_state,
-        )
+class SVMImageClassifier(SVC):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.abbreviation = "svm"
 
     def _flatten_images(self, X):
@@ -59,82 +26,54 @@ class SVMImageClassifier(svm.SVC):
         else:
             raise ValueError(f"Unexpected input shape: {X.shape}")
 
-    def train(self, X, y, batch_size=100, epochs=10, validation_split=0.2):
+    def train(self, X, y, validation_split=0.2, X_val=None, y_val=None):
         """
-        Train the SVM model on flattened images with approximate batching and epochs.
-        Logs history to a .pkl file with train/validation accuracy and loss per epoch.
+        Fit the model on the entire dataset and track training and validation history.
         """
         X_flat = self._flatten_images(X)
 
-        # Split the data into training and validation sets
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_flat, y, test_size=validation_split, random_state=42
-        )
-        n_samples = X_train.shape[0]
+        # Convert to CuPy arrays for GPU processing
+        X_flat = cp.asarray(X_flat)
+        y = cp.asarray(y)
 
-        # Initialize history dictionary to record metrics
+        # Split the data into training and validation sets if X_val and y_val are not provided
+        if X_val is None or y_val is None:
+            X_train, X_val, y_train, y_val = train_test_split(
+                X_flat, y, test_size=validation_split, random_state=42
+            )
+        else:
+            X_val_flat = self._flatten_images(X_val)
+            X_val = cp.asarray(X_val_flat)
+            X_train, y_train, X_val, y_val = X_flat, y, X_val, y_val
+
+        # Fit the model on the training set
+        super().fit(X_train, y_train)
+
+        # Calculate training accuracy and loss
+        y_train_pred = super().predict(X_train)
+        train_accuracy = accuracy_score(cp.asnumpy(y_train), cp.asnumpy(y_train_pred))
+
+        # Note: cuML's SVC does not provide `predict_proba` by default (since SVMs do not inherently output probabilities)
+        # If you require probabilities, consider using a method like Platt scaling after fitting the model
+        train_loss = None
+
+        # Calculate validation accuracy
+        y_val_pred = super().predict(X_val)
+        val_accuracy = accuracy_score(cp.asnumpy(y_val), cp.asnumpy(y_val_pred))
+        val_loss = None
+
         history = {
-            "epoch": [],
-            "train_accuracy": [],
-            "train_loss": [],
-            "val_accuracy": [],
-            "val_loss": [],
+            "epoch": [1],  # SVM is not trained over multiple epochs
+            "train_accuracy": [train_accuracy],
+            "train_loss": [train_loss],
+            "val_accuracy": [val_accuracy],
+            "val_loss": [val_loss],
         }
 
-        for epoch in range(epochs):
-            # Shuffle the training data at the beginning of each epoch
-            indices = np.arange(n_samples)
-            np.random.shuffle(indices)
-            X_train = X_train[indices]
-            y_train = y_train[indices]
-
-            # Track support vectors and labels
-            support_vectors = None
-            support_labels = None
-
-            for start in tqdm(
-                range(0, n_samples, batch_size),
-                desc=f"SVM | Epoch {epoch + 1}/{epochs}",
-                unit="batch",
-            ):
-                end = min(start + batch_size, n_samples)
-                X_batch, y_batch = X_train[start:end], y_train[start:end]
-
-                if start == 0:
-                    # Initial fit on the first batch of the epoch
-                    super().fit(X_batch, y_batch)
-                    support_vectors = self.support_
-                    support_labels = y_train[self.support_]
-                else:
-                    # Combine support vectors and fit with the new batch
-                    X_combined = np.vstack([X_train[support_vectors], X_batch])
-                    y_combined = np.hstack([support_labels, y_batch])
-
-                    # Fit again with combined support vectors and new batch
-                    super().fit(X_combined, y_combined)
-                    # Update support vectors with the latest ones
-                    support_vectors = self.support_
-                    support_labels = y_combined[self.support_]
-
-            # Calculate training accuracy and loss for the current epoch
-            train_accuracy = super().score(X_train, y_train)
-            train_probabilities = super().predict_proba(X_train)
-            train_loss = log_loss(y_train, train_probabilities)
-            # Calculate validation accuracy and loss for the current epoch
-            val_accuracy = super().score(X_val, y_val)
-            val_probabilities = super().predict_proba(X_val)
-            val_loss = log_loss(y_val, val_probabilities)
-
-            # Record history
-            history["epoch"].append(epoch + 1)
-            history["train_accuracy"].append(train_accuracy)
-            history["train_loss"].append(train_loss)
-            history["val_accuracy"].append(val_accuracy)
-            history["val_loss"].append(val_loss)
-
-            print(
-                f"Epoch {epoch + 1} - Train Accuracy: {train_accuracy:.4f} - Train Loss: {train_loss:.4f} - Validation Accuracy: {val_accuracy:.4f} - Validation Loss: {val_loss:.4f}"
-            )
+        print(
+            f"Training complete - train_accuracy: {train_accuracy:.4f} "
+            f"- val_accuracy: {val_accuracy:.4f}"
+        )
 
         # Save history log
         self._save_history(history)
@@ -143,7 +82,7 @@ class SVMImageClassifier(svm.SVC):
 
     def predict(self, X):
         """
-        Override the predict method to accept 3D image input and flatten it.
+        Override the predict method to accept 2D image input and flatten it.
         """
         X_flat = self._flatten_images(X)
         return super().predict(X_flat)

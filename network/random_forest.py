@@ -1,55 +1,17 @@
-from sklearn.ensemble import RandomForestClassifier
-import numpy as np
+# from sklearn.ensemble import RandomForestClassifier
+from cuml.ensemble import RandomForestClassifier
 import os
 import pickle
-from tqdm import tqdm
 from datetime import datetime
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import log_loss
+import cupy as cp
+from sklearn.metrics import accuracy_score
 
 
 class RandomForestImageClassifier(RandomForestClassifier):
-    def __init__(
-        self,
-        n_estimators=100,
-        criterion="gini",
-        max_depth=None,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        min_weight_fraction_leaf=0.0,
-        max_features="sqrt",
-        max_leaf_nodes=None,
-        min_impurity_decrease=0.0,
-        bootstrap=True,
-        oob_score=False,
-        n_jobs=None,
-        random_state=None,
-        verbose=0,
-        warm_start=False,
-        class_weight=None,
-        ccp_alpha=0.0,
-        max_samples=None,
-    ):
-        super().__init__(
-            n_estimators=n_estimators,
-            criterion=criterion,
-            max_depth=max_depth,
-            min_samples_split=min_samples_split,
-            min_samples_leaf=min_samples_leaf,
-            min_weight_fraction_leaf=min_weight_fraction_leaf,
-            max_features=max_features,
-            max_leaf_nodes=max_leaf_nodes,
-            min_impurity_decrease=min_impurity_decrease,
-            bootstrap=bootstrap,
-            oob_score=oob_score,
-            n_jobs=n_jobs,
-            random_state=random_state,
-            verbose=verbose,
-            warm_start=warm_start,
-            class_weight=class_weight,
-            ccp_alpha=ccp_alpha,
-            max_samples=max_samples,
-        )
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.abbreviation = "rfc"
 
     def _flatten_images(self, X):
@@ -67,75 +29,53 @@ class RandomForestImageClassifier(RandomForestClassifier):
         else:
             raise ValueError(f"Unexpected input shape: {X.shape}")
 
-    def train(self, X, y, batch_size, epochs, validation_split=0.2):
+    def train(self, X, y, validation_split=0.2, X_val=None, y_val=None):
         """
-        Fit the model on data in batches over multiple epochs and track training and validation history.
+        Fit the model on the entire dataset and track training and validation history.
         """
         X_flat = self._flatten_images(X)
 
-        # Split the data into training and validation sets
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_flat, y, test_size=validation_split, random_state=42
-        )
-        n_samples = X_train.shape[0]
+        # Convert to CuPy arrays for GPU processing
+        X_flat = cp.asarray(X_flat)
+        y = cp.asarray(y)
 
-        # Initialize history dictionary to record metrics
+        # Split the data into training and validation sets if X_val and y_val are not provided
+        if X_val is None or y_val is None:
+            X_train, X_val, y_train, y_val = train_test_split(
+                X_flat, y, test_size=validation_split, random_state=42
+            )
+        else:
+            X_val_flat = self._flatten_images(X_val)
+            X_val = cp.asarray(X_val_flat)
+            X_train, y_train, X_val, y_val = X_flat, y, X_val, y_val
+
+        # Fit the model on the training set
+        super().fit(X_train, y_train)
+
+        # Calculate training accuracy and loss manually
+        y_train_pred = super().predict(X_train)
+        train_accuracy = accuracy_score(cp.asnumpy(y_train), cp.asnumpy(y_train_pred))
+        train_probabilities = super().predict_proba(X_train)
+        train_loss = log_loss(cp.asnumpy(y_train), cp.asnumpy(train_probabilities))
+
+        # Calculate validation accuracy and loss manually
+        y_val_pred = super().predict(X_val)
+        val_accuracy = accuracy_score(cp.asnumpy(y_val), cp.asnumpy(y_val_pred))
+        val_probabilities = super().predict_proba(X_val)
+        val_loss = log_loss(cp.asnumpy(y_val), cp.asnumpy(val_probabilities))
+
+        # Store training history
         history = {
-            "epoch": [],
-            "train_accuracy": [],
-            "train_loss": [],
-            "val_accuracy": [],
-            "val_loss": [],
+            "train_accuracy": [train_accuracy],
+            "train_loss": [train_loss],
+            "val_accuracy": [val_accuracy],
+            "val_loss": [val_loss],
         }
 
-        # Accumulate batches for full training
-        accumulated_X = []
-        accumulated_y = []
-
-        for epoch in range(epochs):
-            # Shuffle the training data at the beginning of each epoch
-            indices = np.arange(n_samples)
-            np.random.shuffle(indices)
-            X_train = X_train[indices]
-            y_train = y_train[indices]
-
-            for start in tqdm(
-                range(0, n_samples, batch_size),
-                desc=f"RFC | Epoch {epoch + 1}/{epochs}",
-                unit="batch",
-            ):
-                end = min(start + batch_size, n_samples)
-                X_batch, y_batch = X_train[start:end], y_train[start:end]
-
-                # Accumulate data
-                accumulated_X.append(X_batch)
-                accumulated_y.append(y_batch)
-
-                # Combine accumulated data
-                X_combined = np.vstack(accumulated_X)
-                y_combined = np.hstack(accumulated_y)
-
-                # Re-train the model with the accumulated data
-                super().fit(X_combined, y_combined)
-
-            # Calculate accuracy and loss for the current epoch
-            train_accuracy = super().score(X_combined, y_combined)
-            train_probabilities = super().predict_proba(X_combined)
-            train_loss = log_loss(y_combined, train_probabilities)
-
-            val_accuracy = super().score(X_val, y_val)
-            val_probabilities = super().predict_proba(X_val)
-            val_loss = log_loss(y_val, val_probabilities)
-
-            history["epoch"].append(epoch + 1)
-            history["train_accuracy"].append(train_accuracy)
-            history["train_loss"].append(train_loss)
-            history["val_accuracy"].append(val_accuracy)
-            history["val_loss"].append(val_loss)
-
-            print(
-                f"epoch {epoch + 1} - train_accuracy: {train_accuracy:.4f} - train_loss: {train_loss:.4f} - val_accuracy: {val_accuracy:.4f} - val_loss: {val_loss:.4f}"
-            )
+        print(
+            f"Training complete - train_accuracy: {train_accuracy:.4f} - train_loss: {train_loss:.4f} "
+            f"- val_accuracy: {val_accuracy:.4f} - val_loss: {val_loss:.4f}"
+        )
 
         # Save history log
         self._save_history(history)
@@ -144,7 +84,7 @@ class RandomForestImageClassifier(RandomForestClassifier):
 
     def predict(self, X):
         """
-        Override the predict method to accept 3D image input and flatten it.
+        Override the predict method to accept 2D image input and flatten it.
         """
         X_flat = self._flatten_images(X)  # Flatten the 2D images to 1D
         return super().predict(X_flat)
