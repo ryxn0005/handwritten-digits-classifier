@@ -3,9 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-logs/
-data/raw/*
-data/processed/*
+logs/*
+data/*/*
 model/*
 
 # C extensions
