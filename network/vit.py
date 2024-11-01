@@ -310,6 +310,8 @@ class VisionTransformer(Model):
         Layer normalization applied to transformer output.
     head : tf.keras.layers.Dense
         Dense layer for output classification.
+    abbreviation : str
+        Abbreviation used for naming saved model files and logs.
     """
 
     def __init__(

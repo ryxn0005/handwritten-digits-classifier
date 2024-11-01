@@ -1,27 +1,44 @@
-from utilities.data_loader.load_data import CustomDataLoader
-from network.convnet import ConvNet
-from network.vit import VisionTransformer
-from network.random_forest import RandomForestImageClassifier
-from network.svm import SVMImageClassifier
+# Library Imports
+import os
+import keras
+import numpy as np
+import pickle
+from sklearn.utils import resample
 from keras.src.callbacks import EarlyStopping, ModelCheckpoint
 from keras.src.losses import SparseCategoricalCrossentropy
 from keras.src.metrics import (
     SparseCategoricalAccuracy,
     SparseTopKCategoricalAccuracy,
 )
-from keras.src.optimizers import AdamW, Adam
+from keras.src.optimizers import AdamW
+
+# Custom Imports
 from training.train_custom import Trainer
-import os
-import keras
-import numpy as np
 from evaluation.confusion_matrix import plot_confusion_matrix
 from evaluation.math_metrics import calculate_multiclass_metrics
 from evaluation.cross_validation import k_fold_cross_validation
-import pickle
-from sklearn.utils import resample
+from utilities.data_loader.load_data import CustomDataLoader
+from network.convnet import ConvNet
+from network.vit import VisionTransformer
+from network.random_forest import RandomForestImageClassifier
+from network.svm import SVMImageClassifier
 
 
 def load_data(test_size):
+    """
+    Load and split data into training and testing sets.
+
+    @Usage:
+        Loads raw image data, splits it into train and test sets based on `test_size`.
+
+    @Parameters:
+    test_size : float
+        Proportion of data to be allocated to the test set.
+
+    @Returns:
+    tuple : np.ndarray
+        Split datasets (X_train, X_test, y_train, y_test).
+    """
     c = CustomDataLoader("./data/raw/", 28)
     X, y = c.load_data()
     split_index = int(X.shape[0] * (1 - test_size))
@@ -32,10 +49,24 @@ def load_data(test_size):
 
 
 def specify_hyperparameters(model_type):
+    """
+    Prompt user to specify model hyperparameters.
+
+    @Usage:
+        Allows user to input hyperparameters; provides defaults based on model type.
+
+    @Parameters:
+    model_type : str
+        Type of model for which hyperparameters are required (e.g., 'svm', 'rfc', 'kfold').
+
+    @Returns:
+    dict : Hyperparameter configuration based on user input or defaults.
+    """
     # Prompt the user to specify hyperparameters with defaults
     if model_type in {"svm", "rfc"}:
         return {}
     elif model_type == "kfold":
+        # Obtain parameters specific to K-Fold Cross Validation
         learning_rate = float(input("Enter learning rate (default 0.001): ") or 0.001)
         weight_decay = float(input("Enter weight decay (default 0.0001): ") or 0.0001)
         batch_size = int(input("Enter batch size (default 256): ") or 256)
@@ -50,6 +81,7 @@ def specify_hyperparameters(model_type):
         }
 
     else:
+        # Obtain general parameters for training models
         learning_rate = float(input("Enter learning rate (default 0.001): ") or 0.001)
         weight_decay = float(input("Enter weight decay (default 0.0001): ") or 0.0001)
         batch_size = int(input("Enter batch size (default 256): ") or 256)
@@ -67,7 +99,22 @@ def specify_hyperparameters(model_type):
 
 
 def setup_model(model_type, hyperparameters):
-    """Setup model based on the type and hyperparameters provided."""
+    """
+    Configure the specified model type with relevant hyperparameters.
+
+    @Usage:
+        Loads or creates the chosen model type, setting up hyperparameters and callbacks.
+
+    @Parameters:
+    model_type : str
+        Type of model to set up (e.g., 'vit', 'convnet', 'rfc', 'svm').
+    hyperparameters : dict
+        Configuration for hyperparameters such as learning rate, batch size, etc.
+
+    @Returns:
+    tuple : Configured model, optimizer, and callbacks.
+    """
+    optimizer = None
     if model_type == "vit":
         saved_model_path = "./model/vit/vit.keras"
         if os.path.isfile(saved_model_path):
@@ -165,11 +212,11 @@ def setup_model(model_type, hyperparameters):
                 model = SVMImageClassifier()
         else:
             model = SVMImageClassifier()
-        optimizer = None
+        optimizer = None  # Not needed for non-deep learning models
     else:
         raise ValueError("Invalid model type selected")
 
-    # Set up callbacks if applicable
+    # Set up callbacks if deep learning models are used
     if model_type in {"vit", "convnet"}:
         callbacks = [
             EarlyStopping(
@@ -194,7 +241,26 @@ def setup_model(model_type, hyperparameters):
 
 
 def train_model(model, optimizer, callbacks, hyperparameters, X_train, y_train):
+    """
+    Train the specified model using provided data and hyperparameters.
+
+    @Usage:
+        Initializes and trains the model using the Trainer class if applicable, saves non-deep learning models.
+
+    @Parameters:
+    model : object
+        The model instance to be trained.
+    optimizer : object
+        Optimizer configured for deep learning models.
+    callbacks : list
+        List of callbacks for monitoring model training.
+    hyperparameters : dict
+        Dictionary containing model training parameters (epochs, batch size, etc.).
+    X_train, y_train : np.ndarray
+        Training data and labels.
+    """
     if hasattr(model, "abbreviation") and model.abbreviation in {"vit", "convnet"}:
+        # Train deep learning models with Trainer class
         trainer = Trainer(
             model=model,
             train_X=X_train,
@@ -213,6 +279,8 @@ def train_model(model, optimizer, callbacks, hyperparameters, X_train, y_train):
         )
         trainer.train()
     else:
+        # Train and save RandomForest and SVM models
+        # Resampled datasets for non deep learning models
         X_train_sampled, y_train_sampled = resample(
             X_train, y_train, n_samples=20000, random_state=42
         )
@@ -231,9 +299,44 @@ def train_model(model, optimizer, callbacks, hyperparameters, X_train, y_train):
         print(f"Model saved to {save_path}")
 
 
-def main():
-    X_train, X_test, y_train, y_test = None, None, None, None
+def log_metrics_to_file(model, metrics):
+    """
+    Log model performance metrics to a file.
 
+    @Usage:
+        Writes metrics to a file for each class, logging accuracy, precision, recall, etc.
+
+    @Parameters:
+    model : object
+        The model instance whose abbreviation is used to generate file paths.
+    metrics : dict
+        Dictionary containing calculated metrics for each class.
+    """
+    # Define the directory and file path
+    directory = f"./logs/metrics/{model.abbreviation}"
+    file_path = f"{directory}/{model.abbreviation}.txt"
+
+    # Create the directory if it doesn't exist
+    os.makedirs(directory, exist_ok=True)
+
+    # Open the file in write mode
+    with open(file_path, "w") as f:
+        # Write metrics for each class
+        for class_label, class_metrics in metrics.items():
+            f.write(f"Class {class_label} metrics:\n")
+            for metric_name, metric_value in class_metrics.items():
+                f.write(f"  {metric_name}: {metric_value:.4f}\n")
+            f.write("\n")
+
+
+def main():
+    """
+    Main function to load data, train models, and evaluate performance.
+
+    @Usage:
+        Provides a menu interface for model training, loading, and evaluation.
+    """
+    X_train, X_test, y_train, y_test = None, None, None, None
     while True:
         print("\nMain Menu:")
         print("1. Load Training Data")
@@ -244,14 +347,11 @@ def main():
         choice = int(input("Select an option (0-3): "))
 
         if choice == 1:
+            # Load data into train/test sets
             X_train, X_test, y_train, y_test = load_data(test_size=0.3)
             print("Data loaded successfully!")
-            print(f"X train: {X_train.shape}")
-            print(f"X test: {X_test.shape}")
-            print(f"y train: {y_train.shape}")
-            print(f"y test: {y_test.shape}")
-
         elif choice == 2:
+            # Train model based on user choice
             if X_train is None or X_test is None or y_train is None or y_test is None:
                 print("Please load the training data first.")
                 continue
@@ -272,6 +372,7 @@ def main():
             else:
                 print("Invalid option selected.")
         elif choice == 3:
+            # Perform K-Fold Cross Validation
             if X_train is None or X_test is None or y_train is None or y_test is None:
                 print("Please load the training data first.")
                 continue
@@ -312,10 +413,10 @@ def main():
                 save_dir="./model",
             )
         elif choice == 4:
+            # Evaluate model performance and log metrics
             print(
                 "1. Vision Transformer (ViT)\t2. ConvNet\t3. Random Forest (RFC)\t4. SVM"
             )
-
             while True:
                 try:
                     option = int(input("Choose a model to evaluate (1-4): "))
@@ -382,10 +483,7 @@ def main():
 
             # Calculate accuracy, precision, recall and f1-score of each number for the model
             metrics = calculate_multiclass_metrics(y_test, y_pred_classes)
-            for class_label, class_metrics in metrics.items():
-                print(f"Class {class_label} metrics:")
-                for metric_name, metric_value in class_metrics.items():
-                    print(f"  {metric_name}: {metric_value:.4f}")
+            log_metrics_to_file(model, metrics)
 
         elif choice == 0:
             print("Exiting the program.")

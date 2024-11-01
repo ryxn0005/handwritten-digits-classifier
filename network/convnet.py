@@ -2,6 +2,36 @@ from keras.src import Model, layers
 
 
 class ConvNet(Model):
+    """
+    ConvNet is a convolutional neural network model designed for image classification tasks.
+
+    @Parameters:
+    n_classes : int, optional, default=10
+        Number of output classes for classification.
+    kwargs : dict
+        Additional arguments for the Keras Model initialization.
+
+    @Attributes:
+    abbreviation : str
+        Abbreviation used to name model files and logs.
+    conv1, conv2, conv3, conv4 : tf.keras.layers.Conv2D
+        Convolutional layers for feature extraction.
+    bn1, bn2, bn3, bn4 : tf.keras.layers.BatchNormalization
+        Batch normalization layers to stabilize training.
+    relu1, relu2, relu3, relu4 : tf.keras.layers.ReLU
+        Activation layers for introducing non-linearity.
+    pool1, pool2, pool3 : tf.keras.layers.MaxPooling2D
+        Pooling layers to reduce spatial dimensions.
+    dropout1, dropout2, dropout3, dropout_fc : tf.keras.layers.Dropout
+        Dropout layers to prevent overfitting.
+    global_pool : tf.keras.layers.GlobalAveragePooling2D
+        Global average pooling layer for dimensionality reduction.
+    fc1 : tf.keras.layers.Dense
+        Fully connected layer for further feature extraction.
+    classifier : tf.keras.layers.Dense
+        Output layer with softmax activation for class prediction.
+    """
+
     def __init__(self, n_classes: int = 10, **kwargs):
         super().__init__(**kwargs)
         self.abbreviation = "convnet"
@@ -42,6 +72,19 @@ class ConvNet(Model):
         self.classifier = layers.Dense(n_classes, activation="softmax")
 
     def call(self, x):
+        """
+        Forward pass of the ConvNet model, defining the flow of data through each layer.
+
+        @Usage:
+            Passes input data through convolutional, pooling, dropout, and dense layers to produce output predictions.
+
+        @Parameters:
+        x : tf.Tensor
+            Input tensor with shape (batch_size, height, width, channels).
+
+        @Returns:
+        tf.Tensor : Prediction tensor with shape (batch_size, n_classes).
+        """
         # ConvNet block 1
         x = self.conv1(x)
         x = self.bn1(x)

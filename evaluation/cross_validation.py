@@ -21,10 +21,48 @@ def k_fold_cross_validation(
     k=5,
     save_dir="./model",
 ):
+    """
+    Performs k-fold cross-validation on multiple models, training and evaluating each model on all k folds.
+
+    @Usage:
+        Trains and evaluates each model in `models` using k-fold cross-validation, storing validation accuracy scores
+        for each fold and model. Saves trained models for each fold to the specified directory.
+
+    @Parameters:
+    models : dict
+        Dictionary of models to train, with model names as keys and functions returning model instances as values.
+    X : np.ndarray
+        Feature data to train and validate models.
+    y : np.ndarray
+        Labels corresponding to feature data.
+    loss_fn : tf.keras.losses
+        Loss function used for training deep learning models.
+    metrics : list
+        List of metrics to monitor during training (e.g., accuracy).
+    epochs : int, optional, default=10
+        Number of training epochs.
+    batch_size : int, optional, default=32
+        Size of each training batch.
+    num_augs : int, optional, default=2
+        Number of augmentations to apply per image.
+    learning_rate : float, optional, default=0.001
+        Learning rate for deep learning models.
+    weight_decay : float, optional, default=0.0001
+        Weight decay (L2 regularization) for deep learning optimizers.
+    callbacks : list, optional, default=None
+        List of callbacks such as EarlyStopping for deep learning models.
+    k : int, optional, default=5
+        Number of folds for cross-validation.
+    save_dir : str, optional, default="./model"
+        Directory to save trained models for each fold.
+
+    @Returns:
+    dict : Dictionary of model names and their list of validation accuracy scores for each fold.
+    """
     # Create the directory to save models if it does not exist
     os.makedirs(save_dir, exist_ok=True)
 
-    # Shuffle the data to ensure randomness
+    # Shuffle the data to ensure randomness across folds
     indices = np.arange(X.shape[0])
     np.random.shuffle(indices)
     X = X[indices]
@@ -39,7 +77,6 @@ def k_fold_cross_validation(
         val_start = fold * fold_size
         val_end = val_start + fold_size
         X_val, y_val = X[val_start:val_end], y[val_start:val_end]
-
         X_train = np.concatenate([X[:val_start], X[val_end:]], axis=0)
         y_train = np.concatenate([y[:val_start], y[val_end:]], axis=0)
 
@@ -48,6 +85,7 @@ def k_fold_cross_validation(
             model = model_fn()
 
             if model.abbreviation in {"vit", "convnet"}:
+                # Initialize optimizer for deep learning models
                 optimizer = AdamW(
                     learning_rate=learning_rate, weight_decay=weight_decay
                 )
@@ -74,10 +112,7 @@ def k_fold_cross_validation(
                     X_train, y_train, n_samples=20000, random_state=fold
                 )
                 X_val_sampled, y_val_sampled = resample(
-                    X_val,
-                    y_val,
-                    n_samples=min(20000, len(X_val)),
-                    random_state=fold,
+                    X_val, y_val, n_samples=min(20000, len(X_val)), random_state=fold
                 )
 
                 # Train Random Forest or SVM models
@@ -89,12 +124,13 @@ def k_fold_cross_validation(
                 )
                 val_accuracy = log["val_accuracy"]
 
+            # Print validation accuracy for the current fold and model
             print(
                 f"Fold {fold + 1} - {model_name} - Validation Accuracy: {val_accuracy:.4f}"
             )
             model_scores[model_name].append(val_accuracy)
 
-            # Save the model for the current fold
+            # Define path to save the model for the current fold
             model_path = os.path.join(
                 save_dir,
                 f"{model.abbreviation}/fold/{model.abbreviation}_fold_{fold + 1}.keras"
@@ -102,6 +138,7 @@ def k_fold_cross_validation(
                 else f"{model.abbreviation}/fold/{model.abbreviation}_fold_{fold + 1}.pkl",
             )
             os.makedirs(os.path.dirname(model_path), exist_ok=True)
+            # Save the model based on its type
             if model.abbreviation in {"vit", "convnet"}:
                 model.save(model_path)
             else:
@@ -109,7 +146,7 @@ def k_fold_cross_validation(
                     pickle.dump(model, f)
             print(f"Model for fold {fold + 1} saved at: {model_path}")
 
-    # Calculate and print mean scores for each model
+    # Calculate and print mean validation accuracy scores for each model
     for model_name, scores in model_scores.items():
         mean_score = np.mean(scores)
         print(f"{model_name} - Mean Validation Accuracy: {mean_score:.4f}")

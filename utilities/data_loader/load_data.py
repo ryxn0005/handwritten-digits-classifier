@@ -8,11 +8,30 @@ import pickle
 
 
 class CustomDataLoader:
-    def __init__(
-        self,
-        data_dir: str,
-        image_size: int = 28,
-    ):
+    """
+    CustomDataLoader class for loading and processing both custom and MNIST datasets,
+    allowing them to be merged for training deep learning models.
+
+    @Parameters:
+    data_dir : str
+        Path to the directory containing the custom dataset.
+    image_size : int, optional, default=28
+        Target size for resizing images.
+
+    @Attributes:
+    data_dir : str
+        Base directory for the dataset.
+    image_size : int
+        Target size for resizing images.
+    data : list
+        List containing processed images and their corresponding labels.
+    labels : dict
+        Dictionary mapping class paths to numeric labels.
+    categories : list
+        List of paths to each category (label) directory within the dataset.
+    """
+
+    def __init__(self, data_dir: str, image_size: int = 28):
         self.data_dir = data_dir  # Base directory for dataset
         self.image_size = image_size  # Size to resize images
         self.data = []
@@ -21,7 +40,17 @@ class CustomDataLoader:
 
     def load_categories(self):
         """
-        Find all dataset subfolders in the data directory and assign categories for each dataset.
+        Find all subfolders in the data directory to set up dataset categories and labels.
+
+        @Usage:
+            Searches through the data directory to locate subfolders, assigning numeric labels
+            based on folder names.
+
+        @Parameters:
+        None
+
+        @Returns:
+        None
         """
         dataset_subfolders = [
             folder
@@ -54,18 +83,23 @@ class CustomDataLoader:
 
     def make_training_data(self):
         """
-        Build the training data by recursively finding images in each category.
+        Build the training data by loading, resizing, and preprocessing images from each category.
+
+        @Usage:
+            Recursively searches each category for images, preprocesses each, and adds them to
+            the training data.
+
+        @Parameters:
+        None
+
+        @Returns:
+        None
         """
-        for category_path in self.categories:  # Iterate over each full category path (e.g., 'dataset_name/0', 'dataset_name/1', ...)
-            full_category_path = os.path.join(
-                self.data_dir, category_path
-            )  # Full path to each category folder
-            class_num = self.labels[
-                category_path
-            ]  # Numeric label for the category (0-9)
+        for category_path in self.categories:
+            full_category_path = os.path.join(self.data_dir, category_path)
+            class_num = self.labels[category_path]
 
             print(f"Processing category: {category_path}")
-            # Recursively find all images in subfolders
             image_files = []
             for root, _, files in os.walk(full_category_path):
                 image_files.extend(
@@ -76,37 +110,33 @@ class CustomDataLoader:
                     ]
                 )
 
-            # Apply tqdm to show the progress of reading images
+            # Apply tqdm to show progress of reading images
             for img_path in tqdm(
                 image_files, desc=f"Processing {category_path}", leave=False
             ):
                 try:
-                    img_array = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)  # Load image
+                    img_array = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
 
-                    # Check if the image was successfully loaded
+                    # Skip images that cannot be loaded
                     if img_array is None:
-                        print(
-                            f"Warning: Unable to load image {img_path}. Skipping this file."
-                        )
+                        print(f"Warning: Unable to load image {img_path}. Skipping.")
                         continue
 
-                    # Check if the image has an alpha channel
+                    # If image has an alpha channel, use only the alpha channel
                     if len(img_array.shape) == 3 and img_array.shape[2] == 4:
-                        img_array = cv2.split(img_array)[-1].astype(
-                            np.float32
-                        )  # Use alpha channel only
+                        img_array = cv2.split(img_array)[-1].astype(np.float32)
                     else:
                         img_array = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
 
+                    # Resize and preprocess the image
                     resized_array = cv2.resize(
                         img_array, (self.image_size, self.image_size)
-                    )  # Resize image
-
+                    )
                     processed_image = preprocess_image(resized_array)
 
                     self.data.append(
                         [processed_image, class_num]
-                    )  # Add image and label to training_data
+                    )  # Add processed image and label
                 except OSError as e:
                     print(f"Error reading image {img_path}: {e}")
                 except Exception as e:
@@ -116,41 +146,67 @@ class CustomDataLoader:
 
     def load_custom_data(self):
         """
-        Convert the custom data into features and labels.
+        Extracts features and labels from custom data.
+
+        @Usage:
+            Separates images and their labels into separate arrays.
+
+        @Parameters:
+        None
+
+        @Returns:
+        tuple : np.ndarray
+            Features (X) and labels (y) as separate arrays.
         """
-        # Separate features and labels
         X = [img for img, label in self.data]
         y = [label for img, label in self.data]
 
-        # Convert the lists to numpy arrays
-        X = np.array(X).reshape(
-            -1, self.image_size, self.image_size, 1
-        )  # (batch_size, height, width, channels)
+        X = np.array(X).reshape(-1, self.image_size, self.image_size, 1)
         y = np.array(y)
 
         return X, y
 
     def load_mnist_data(self):
         """
-        Load the MNIST data and combine train and test sets.
+        Loads the MNIST dataset and combines train and test sets.
+
+        @Usage:
+            Loads MNIST data, resizes to the specified image size, and reshapes for model input.
+
+        @Parameters:
+        None
+
+        @Returns:
+        tuple : np.ndarray
+            MNIST data as combined features (X) and labels (y).
         """
         (X_train, y_train), (X_test, y_test) = mnist.load_data()
 
-        # Combine train and test data
         X = np.concatenate((X_train, X_test), axis=0).reshape(
             -1, self.image_size, self.image_size, 1
-        )  # (batch_size, height, width, channels)
+        )
         y = np.concatenate((y_train, y_test), axis=0)
 
         return X, y
 
     def merge_data(self):
-        """Merge MNIST data with custom data and return combined features and labels."""
+        """
+        Merges MNIST data with custom data and returns combined features and labels.
 
+        @Usage:
+            Loads both custom and MNIST data, merges them, shuffles the combined dataset,
+            and returns it.
+
+        @Parameters:
+        None
+
+        @Returns:
+        tuple : np.ndarray
+            Combined dataset with features (X) and labels (y).
+        """
         self.load_categories()
         self.make_training_data()
 
-        # Load MNIST and Custom Data
         X_mnist, y_mnist = self.load_mnist_data()
         X_custom, y_custom = self.load_custom_data()
 
@@ -169,13 +225,21 @@ class CustomDataLoader:
 
         return X, y
 
-    def load_data(
-        self,
-        processed_data_path: str = "data/processed/combined_data.pkl",
-    ):
+    def load_data(self, processed_data_path: str = "data/processed/combined_data.pkl"):
         """
-        Load combined data from 'data/processed' if it exists. If not, load MNIST and custom data,
-        merge them, and save to the specified location.
+        Load combined dataset from a processed file, or create and save it if not found.
+
+        @Usage:
+            If combined data exists in the specified path, load it. Otherwise, merge MNIST
+            and custom data, save, and return it.
+
+        @Parameters:
+        processed_data_path : str, optional, default="data/processed/combined_data.pkl"
+            Path to save or load the processed combined dataset.
+
+        @Returns:
+        tuple : np.ndarray
+            Combined features (X) and labels (y) from MNIST and custom data.
         """
         # Check if the processed data file exists
         if os.path.exists(processed_data_path):
@@ -194,10 +258,7 @@ class CustomDataLoader:
                     X, y = pickle.load(pickle_in)
             elif choice == "C":
                 print("Creating new data by loading and merging raw data...")
-                # Load MNIST and Custom Data, and merge them
                 X, y = self.merge_data()
-
-                # Save the combined data for future use
                 os.makedirs(os.path.dirname(processed_data_path), exist_ok=True)
                 with open(processed_data_path, "wb") as pickle_out:
                     pickle.dump((X, y), pickle_out)
@@ -208,10 +269,7 @@ class CustomDataLoader:
                     X, y = pickle.load(pickle_in)
         else:
             print("Processed data not found. Loading and merging raw data...")
-            # Load MNIST and Custom Data, and merge them
             X, y = self.merge_data()
-
-            # Save the combined data for future use
             os.makedirs(os.path.dirname(processed_data_path), exist_ok=True)
             with open(processed_data_path, "wb") as pickle_out:
                 pickle.dump((X, y), pickle_out)
