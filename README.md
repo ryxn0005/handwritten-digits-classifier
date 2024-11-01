@@ -7,6 +7,8 @@ This project is designed for image classification tasks, featuring multiple mach
 ```plaintext
 .
 ├── data/                      # Directory for storing datasets
+│   ├── raw/                      # Subdirectory to store raw, unprocessed data
+│   └── processed/                # Subdirectory to store processed data
 ├── evaluation/                # Evaluation scripts
 │   ├── confusion_matrix.py       # Script to plot confusion matrix
 │   ├── cross_validation.py       # Script for k-fold cross-validation
@@ -97,13 +99,20 @@ Directory intended for saving trained model instances. Each model can be saved w
 
 ## Usage
 
-To run the main application, use the following command:
+1. **Setup Data Directory**:
+   - Create a `data` directory in the project root.
+   - Inside `data`, create two subdirectories:
+     - `raw/`: Place your raw, unprocessed data in this folder.
+     - `processed/`: This folder will be used to store preprocessed data files.
 
-```bash
-python -m app
-```
+2. **Running the Main Application**:
+   Use the following command to run the main application:
 
-This will execute `app.py` as the main script, allowing you to load datasets, initialize models, and execute training or evaluation workflows based on the code in `app.py`.
+   ```bash
+   python -m app
+   ```
+
+   This will execute `app.py` as the main script, allowing you to load datasets, initialize models, and execute training or evaluation workflows based on the code in `app.py`.
 
 ## Dependencies
 
